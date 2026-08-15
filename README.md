@@ -1,3 +1,11 @@
+# CoverageIQ
+
+## Server-side document analysis
+
+Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, then run `npm.cmd run server` and `npm.cmd run dev` in separate terminals. The API stores SQLite data and uploaded files in the ignored `data/` directory. OpenAI is only called by `server.mjs`; the browser never receives the API key.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.

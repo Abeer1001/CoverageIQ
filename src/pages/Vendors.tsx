@@ -4,23 +4,27 @@ import type { Vendor } from '../db';
 import { StatusBadge } from './Dashboard';
 import { Plus, Search, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
 
 export default function Vendors() {
+  const { user } = useAuth();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   
   // Add vendor form
   const [vName, setVName] = useState('');
   const [vContact, setVContact] = useState('');
   const [vEmail, setVEmail] = useState('');
-  const [vProject, setVProject] = useState(db.projects[0]?.id || '');
+  const [vProject, setVProject] = useState(() => db.projects.find(project => project.companyId === user?.companyId)?.id || '');
 
   useEffect(() => {
-    setVendors(db.vendors);
-  }, []);
+    const projectIds = new Set(db.projects.filter(project => project.companyId === user?.companyId).map(project => project.id));
+    setVendors(db.vendors.filter(vendor => projectIds.has(vendor.projectId)));
+  }, [user?.companyId]);
 
-  const handleAddVendor = (e: React.FormEvent) => {
+  const handleSaveVendor = (e: React.FormEvent) => {
     e.preventDefault();
     const newV: Vendor = {
       id: crypto.randomUUID(),
@@ -31,11 +35,23 @@ export default function Vendors() {
       upload_token: crypto.randomUUID(),
       overall_status: 'Missing'
     };
-    db.vendors = [...db.vendors, newV];
-    db.logActivity(vProject, `Added vendor ${vName}`, newV.id);
-    setVendors(db.vendors);
+    if (editingId) {
+      const existing = db.vendors.find(v => v.id === editingId)!;
+      db.vendors = db.vendors.map(v => v.id === editingId ? { ...existing, ...newV, id: editingId, upload_token: existing.upload_token, overall_status: existing.overall_status } : v);
+      db.logActivity(vProject, `Updated vendor ${vName}`, editingId);
+    } else {
+      db.vendors = [...db.vendors, newV];
+      db.logActivity(vProject, `Added vendor ${vName}`, newV.id);
+    }
+    const projectIds = new Set(db.projects.filter(project => project.companyId === user?.companyId).map(project => project.id));
+    setVendors(db.vendors.filter(vendor => projectIds.has(vendor.projectId)));
     setShowAdd(false);
+    setEditingId(null);
     setVName(''); setVContact(''); setVEmail('');
+  };
+
+  const editVendor = (vendor: Vendor) => {
+    setEditingId(vendor.id); setVName(vendor.name); setVContact(vendor.contact_name); setVEmail(vendor.email); setVProject(vendor.projectId); setShowAdd(true);
   };
 
   const filtered = vendors.filter(v => v.name.toLowerCase().includes(search.toLowerCase()) || v.email.toLowerCase().includes(search.toLowerCase()));
@@ -52,8 +68,8 @@ export default function Vendors() {
 
       {showAdd && (
         <div className="card mb-4" style={{ border: '1px solid var(--color-brand)' }}>
-          <h3 className="mb-4">Add New Vendor</h3>
-          <form onSubmit={handleAddVendor} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <h3 className="mb-4">{editingId ? 'Edit Vendor' : 'Add New Vendor'}</h3>
+          <form onSubmit={handleSaveVendor} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div className="form-group">
               <label className="form-label">Company Name</label>
               <input type="text" required className="form-input" value={vName} onChange={e => setVName(e.target.value)} />
@@ -73,8 +89,8 @@ export default function Vendors() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
-              <button type="submit" className="btn btn-primary">Save Vendor</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setShowAdd(false); setEditingId(null); }}>Cancel</button>
+              <button type="submit" className="btn btn-primary">{editingId ? 'Save Changes' : 'Save Vendor'}</button>
             </div>
           </form>
         </div>
@@ -114,6 +130,7 @@ export default function Vendors() {
                     <td>
                       <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
                         <Link to={`/project/${project?.id}`} className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>View</Link>
+                        <button className="btn btn-secondary" onClick={() => editVendor(vendor)} style={{ padding: '4px 8px', fontSize: '0.75rem' }}>Edit</button>
                         <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }} onClick={() => navigator.clipboard.writeText(`${window.location.origin}/upload/${vendor.upload_token}`)}>Copy Link</button>
                       </div>
                     </td>

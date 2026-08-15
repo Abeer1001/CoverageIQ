@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import PublicUpload from './pages/PublicUpload';
 import Vendors from './pages/Vendors';
+import Projects from './pages/Projects';
 import Sidebar from './components/Sidebar';
 import TopNav from './components/TopNav';
 
@@ -44,7 +45,7 @@ function App() {
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           
           <Route path="/dashboard" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} />
-          <Route path="/projects" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} /> {/* Temporary redirect to dashboard */}
+          <Route path="/projects" element={<ProtectedRoute><MainLayout><Projects /></MainLayout></ProtectedRoute>} />
           <Route path="/project/:projectId" element={<ProtectedRoute><MainLayout><ProjectDetail /></MainLayout></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute><MainLayout><Vendors /></MainLayout></ProtectedRoute>} />
           

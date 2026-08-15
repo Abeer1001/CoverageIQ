@@ -6,14 +6,15 @@ import { seedDatabase } from '../db';
 
 export function Login() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      login(email);
+      await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message);
@@ -22,8 +23,7 @@ export function Login() {
 
   const loadDemo = () => {
     seedDatabase();
-    login('admin@example.com');
-    navigate('/dashboard');
+    login('admin@example.com', 'demo12345').then(() => navigate('/dashboard')).catch(err => setError(err.message));
   };
 
   return (
@@ -39,10 +39,15 @@ export function Login() {
             <label className="form-label">Email</label>
             <input type="email" required className="form-input" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input type="password" minLength={8} required className="form-input" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Sign In</button>
         </form>
         <div style={{ marginTop: 'var(--space-4)', textAlign: 'center', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
-          <button className="btn btn-secondary" style={{ width: '100%', marginBottom: 'var(--space-2)' }} onClick={loadDemo}>Load Demo Workspace</button>
+          <button type="button" className="btn btn-secondary" style={{ width: '100%', marginBottom: 'var(--space-2)' }} onClick={loadDemo}>Load Demo Workspace</button>
+          <p style={{ fontSize: '0.75rem', margin: '0 0 var(--space-2)' }}>Demo password: demo12345</p>
           <p style={{ fontSize: '0.875rem' }}>Don't have an account? <Link to="/signup" style={{ color: 'var(--color-brand)' }}>Sign up</Link></p>
         </div>
       </div>
@@ -54,14 +59,15 @@ export function Signup() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { signup } = useAuth();
   const navigate = useNavigate();
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      signup(name, email, company);
+      await signup(name, email, company, password);
       navigate('/onboarding');
     } catch (err: any) {
       setError(err.message);
@@ -80,6 +86,10 @@ export function Signup() {
           <div className="form-group">
             <label className="form-label">Full Name</label>
             <input type="text" required className="form-input" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input type="password" minLength={8} required className="form-input" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
           <div className="form-group">
             <label className="form-label">Email</label>

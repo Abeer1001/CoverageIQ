@@ -27,8 +27,9 @@ export default function Dashboard() {
   useEffect(() => {
     // Force recalculation to ensure fresh status
     db.recalculateVendorStatuses();
-    setVendors(db.vendors);
-    setProjects(db.projects);
+    const companyProjects = db.projects.filter(project => project.companyId === user?.companyId);
+    setVendors(db.vendors.filter(vendor => companyProjects.some(project => project.id === vendor.projectId)));
+    setProjects(companyProjects);
   }, []);
 
   const total = vendors.length;
@@ -49,7 +50,7 @@ export default function Dashboard() {
             <option>All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <button className="btn btn-primary"><Plus size={16} /> Add Vendor</button>
+          <Link to="/vendors" className="btn btn-primary"><Plus size={16} /> Add Vendor</Link>
         </div>
       </div>
 

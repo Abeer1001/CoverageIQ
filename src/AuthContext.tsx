@@ -4,9 +4,9 @@ import type { User } from './db';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => void;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  signup: (name: string, email: string, companyName: string) => void;
+  signup: (name: string, email: string, companyName: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,17 +23,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = (email: string) => {
+  const hashPassword = async (password: string) => {
+    const data = new TextEncoder().encode(password);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  };
+
+  const login = async (email: string, password: string) => {
     const u = db.users.find(u => u.email === email);
-    if (u) {
+    const passwordHash = await hashPassword(password);
+    if (u && u.passwordHash === passwordHash) {
       setUser(u);
       localStorage.setItem('coverageiq_session', u.id);
     } else {
-      throw new Error('User not found');
+      throw new Error('Incorrect email or password');
     }
   };
 
-  const signup = (name: string, email: string, companyName: string) => {
+  const signup = async (name: string, email: string, companyName: string, password: string) => {
     if (db.users.some(u => u.email === email)) {
       throw new Error('Email already in use');
     }
@@ -42,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userId = crypto.randomUUID();
 
     db.companies = [...db.companies, { id: companyId, name: companyName }];
-    const newUser = { id: userId, email, name, companyId };
+    const newUser = { id: userId, email, name, companyId, passwordHash: await hashPassword(password) };
     db.users = [...db.users, newUser];
     
     setUser(newUser);

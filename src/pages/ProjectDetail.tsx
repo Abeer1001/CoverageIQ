@@ -4,8 +4,10 @@ import { db } from '../db';
 import type { Vendor, Project, CoverageRequirement, Document } from '../db';
 import { StatusBadge } from './Dashboard';
 import { Plus, Edit2, Check, X, ShieldAlert, FileText, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 export default function ProjectDetail() {
+  const { user } = useAuth();
   const { projectId } = useParams();
   const [project, setProject] = useState<Project | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -15,14 +17,16 @@ export default function ProjectDetail() {
   const [expandedVendor, setExpandedVendor] = useState<string | null>(null);
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [editReqData, setEditReqData] = useState<Partial<CoverageRequirement>>({});
+  const [addingRequirement, setAddingRequirement] = useState(false);
+  const [newRequirement, setNewRequirement] = useState({ coverage_type: '', minimum_limit: '', required: true });
 
   useEffect(() => {
     loadData();
-  }, [projectId]);
+  }, [projectId, user?.companyId]);
 
   const loadData = () => {
     if (projectId) {
-      setProject(db.projects.find(p => p.id === projectId) || null);
+      setProject(db.projects.find(p => p.id === projectId && p.companyId === user?.companyId) || null);
       setVendors(db.vendors.filter(v => v.projectId === projectId));
       setRequirements(db.requirements.filter(r => r.projectId === projectId));
       setDocuments(db.documents.filter(d => d.projectId === projectId));
@@ -36,9 +40,18 @@ export default function ProjectDetail() {
     setEditingReqId(null);
     
     // Recalculate compliance for all vendors in this project because a requirement changed
-    db.recalculateVendorStatuses(projectId);
+    db.reanalyzeProject(projectId!);
     loadData(); // Refresh UI
     db.logActivity(projectId!, 'Updated insurance requirement');
+  };
+
+  const handleAddRequirement = () => {
+    if (!projectId || !newRequirement.coverage_type.trim()) return;
+    db.requirements = [...db.requirements, { id: crypto.randomUUID(), projectId, coverage_type: newRequirement.coverage_type.trim(), minimum_limit: newRequirement.minimum_limit ? Number(newRequirement.minimum_limit) : undefined, required: newRequirement.required }];
+    db.reanalyzeProject(projectId);
+    db.logActivity(projectId, `Added ${newRequirement.coverage_type} requirement`);
+    setNewRequirement({ coverage_type: '', minimum_limit: '', required: true });
+    setAddingRequirement(false); loadData();
   };
 
   if (!project) return <div>Loading project...</div>;
@@ -86,8 +99,14 @@ export default function ProjectDetail() {
         <div className="card" style={{ height: 'fit-content' }}>
           <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
             <h3 style={{ margin: 0 }}>Project Requirements</h3>
-            <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}><Plus size={14} /> Add</button>
+            <button className="btn btn-secondary" onClick={() => setAddingRequirement(true)} style={{ padding: '4px 8px', fontSize: '0.75rem' }}><Plus size={14} /> Add</button>
           </div>
+          {addingRequirement && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            <input className="form-input" placeholder="Coverage type" value={newRequirement.coverage_type} onChange={event => setNewRequirement({ ...newRequirement, coverage_type: event.target.value })} />
+            <input className="form-input" type="number" placeholder="Minimum limit (optional)" value={newRequirement.minimum_limit} onChange={event => setNewRequirement({ ...newRequirement, minimum_limit: event.target.value })} />
+            <label style={{ fontSize: '0.8rem' }}><input type="checkbox" checked={newRequirement.required} onChange={event => setNewRequirement({ ...newRequirement, required: event.target.checked })} /> Required</label>
+            <div style={{ display: 'flex', gap: 8 }}><button className="btn btn-primary" onClick={handleAddRequirement}>Save</button><button className="btn btn-secondary" onClick={() => setAddingRequirement(false)}>Cancel</button></div>
+          </div>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {requirements.map(req => (
               <li key={req.id} style={{ padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-border)' }}>

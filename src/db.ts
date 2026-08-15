@@ -5,6 +5,7 @@ export interface User {
   email: string;
   name: string;
   companyId: string;
+  passwordHash?: string;
 }
 
 export interface Company {
@@ -17,6 +18,8 @@ export interface Project {
   name: string;
   companyId: string;
   status: string;
+  description?: string;
+  created_at?: string;
 }
 
 export interface CoverageRequirement {
@@ -50,6 +53,11 @@ export interface Document {
   expiration_date: string;
   compliance_status: Status;
   gap_analysis: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  extraction_notes?: string;
+  confidence?: number;
 }
 
 export interface ActivityLog {
@@ -58,6 +66,14 @@ export interface ActivityLog {
   vendorId?: string;
   description: string;
   date: string;
+}
+
+export interface Reminder {
+  id: string;
+  documentId: string;
+  vendorId: string;
+  reminder_type: 'expired' | '30_days' | '14_days' | '3_days';
+  sent_at: string;
 }
 
 // Database helper
@@ -92,6 +108,9 @@ class LocalDB {
   get activity(): ActivityLog[] { return this.get<ActivityLog>('activity'); }
   set activity(v: ActivityLog[]) { this.set('activity', v); }
 
+  get reminders(): Reminder[] { return this.get<Reminder>('reminders'); }
+  set reminders(v: Reminder[]) { this.set('reminders', v); }
+
   logActivity(projectId: string, description: string, vendorId?: string) {
     this.activity = [...this.activity, {
       id: crypto.randomUUID(),
@@ -100,6 +119,39 @@ class LocalDB {
       description,
       date: new Date().toISOString()
     }];
+  }
+
+  evaluateDocument(document: Document): Document {
+    const requirement = this.requirements.find(r => r.projectId === document.projectId && r.coverage_type.toLowerCase() === document.coverage_type.toLowerCase());
+    const notes: string[] = [];
+    let status: Status = 'Compliant';
+    if (!requirement) {
+      status = 'Needs Review';
+      notes.push('This coverage type is not listed in the project requirements.');
+    } else if (requirement.minimum_limit && (!document.coverage_limit || document.coverage_limit < requirement.minimum_limit)) {
+      status = 'Non-Compliant';
+      notes.push(`Required limit: $${requirement.minimum_limit.toLocaleString()}; detected limit: ${document.coverage_limit ? `$${document.coverage_limit.toLocaleString()}` : 'not provided'}.`);
+    }
+    const expiration = new Date(document.expiration_date).getTime();
+    if (!Number.isFinite(expiration)) {
+      status = 'Needs Review';
+      notes.push('Expiration date needs review.');
+    } else {
+      const daysUntilExpiration = Math.ceil((expiration - Date.now()) / 86400000);
+      if (daysUntilExpiration < 0) {
+        status = 'Non-Compliant';
+        notes.push('Policy has expired.');
+      } else if (daysUntilExpiration <= 30 && status === 'Compliant') {
+        status = 'Expiring Soon';
+        notes.push(`Policy expires in ${daysUntilExpiration} day${daysUntilExpiration === 1 ? '' : 's'}.`);
+      }
+    }
+    if (!document.insurer_name || !document.policy_number || !document.effective_date) {
+      if (status === 'Compliant') status = 'Needs Review';
+      notes.push('One or more certificate fields are incomplete.');
+    }
+    if (!notes.length) notes.push('Document meets the matching project requirement.');
+    return { ...document, compliance_status: status, gap_analysis: notes.join(' ') };
   }
 
   // Core Business Logic
@@ -120,9 +172,10 @@ class LocalDB {
       }
     });
 
-    if (docs.some(d => d.compliance_status === 'Non-Compliant') || missingRequired) return 'Non-Compliant';
-    if (docs.some(d => d.compliance_status === 'Needs Review')) return 'Needs Review';
-    if (docs.some(d => d.compliance_status === 'Expiring Soon')) return 'Expiring Soon';
+    if (missingRequired) return 'Missing';
+    if (docs.some(d => this.evaluateDocument(d).compliance_status === 'Non-Compliant')) return 'Non-Compliant';
+    if (docs.some(d => this.evaluateDocument(d).compliance_status === 'Needs Review')) return 'Needs Review';
+    if (docs.some(d => this.evaluateDocument(d).compliance_status === 'Expiring Soon')) return 'Expiring Soon';
 
     return 'Compliant';
   }
@@ -143,20 +196,46 @@ class LocalDB {
       this.vendors = currentVendors;
     }
   }
+
+  reanalyzeProject(projectId: string) {
+    this.documents = this.documents.map(document => document.projectId === projectId ? this.evaluateDocument(document) : document);
+    this.recalculateVendorStatuses(projectId);
+    this.createExpirationReminders(projectId);
+  }
+
+  createExpirationReminders(projectId?: string) {
+    const current = this.reminders;
+    const additions: Reminder[] = [];
+    this.documents.filter(document => !projectId || document.projectId === projectId).forEach(document => {
+      const days = Math.ceil((new Date(document.expiration_date).getTime() - Date.now()) / 86400000);
+      const reminderType = days < 0 ? 'expired' : days <= 3 ? '3_days' : days <= 14 ? '14_days' : days <= 30 ? '30_days' : null;
+      if (reminderType && !current.some(reminder => reminder.documentId === document.id && reminder.reminder_type === reminderType)) {
+        additions.push({ id: crypto.randomUUID(), documentId: document.id, vendorId: document.vendorId, reminder_type: reminderType, sent_at: new Date().toISOString() });
+        this.logActivity(document.projectId, `Expiration reminder created (${reminderType.replace('_', ' ')})`, document.vendorId);
+      }
+    });
+    if (additions.length) this.reminders = [...current, ...additions];
+  }
 }
 
 export const db = new LocalDB();
 
 // Seed Demo Data if empty
 export function seedDatabase() {
-  if (db.companies.length > 0) return; // Already seeded
+  if (db.companies.length > 0) {
+    // Upgrade demo workspaces created before password authentication was added.
+    db.users = db.users.map(user => user.email === 'admin@example.com' && !user.passwordHash
+      ? { ...user, passwordHash: '51459c23ca91ebce271449dd8b5c26751c99039c2ae4c628067898ca0e104039' }
+      : user);
+    return;
+  }
 
   const cId = crypto.randomUUID();
   const pId = crypto.randomUUID();
   const uId = crypto.randomUUID();
 
   db.companies = [{ id: cId, name: 'Demo General Contractors' }];
-  db.users = [{ id: uId, name: 'Admin User', email: 'admin@example.com', companyId: cId }];
+  db.users = [{ id: uId, name: 'Admin User', email: 'admin@example.com', companyId: cId, passwordHash: '51459c23ca91ebce271449dd8b5c26751c99039c2ae4c628067898ca0e104039' }];
   db.projects = [{ id: pId, name: 'Downtown Office Renovation', companyId: cId, status: 'Active' }];
   
   db.requirements = [
@@ -202,6 +281,6 @@ export function seedDatabase() {
     { id: crypto.randomUUID(), vendorId: v4, projectId: pId, upload_date: now.toISOString(), insurer_name: 'GlassSure', policy_number: 'GLS-999', coverage_type: 'General Liability', coverage_limit: 1000000, effective_date: now.toISOString(), expiration_date: nextMonth.toISOString(), compliance_status: 'Expiring Soon', gap_analysis: 'Expires within 30 days.' },
   ];
 
-  db.recalculateVendorStatuses();
+  db.reanalyzeProject(pId);
   db.logActivity(pId, 'Demo workspace initialized');
 }
