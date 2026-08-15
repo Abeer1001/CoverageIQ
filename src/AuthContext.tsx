@@ -7,6 +7,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   signup: (name: string, email: string, companyName: string, password: string) => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,8 +62,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('coverageiq_session');
   };
 
+  const updateUser = (updates: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updates };
+      db.users = db.users.map(u => u.id === updated.id ? updated : u);
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, signup }}>
+    <AuthContext.Provider value={{ user, login, logout, signup, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

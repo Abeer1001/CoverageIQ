@@ -73,6 +73,24 @@ async function extractWithOpenAI(document) {
   if (!output) throw Object.assign(new Error('AI response did not include structured output.'), { status: 502 });
   return { extracted: JSON.parse(output), raw };
 }
+async function chatWithOpenAI(message, context) {
+  if (!process.env.OPENAI_API_KEY) throw Object.assign(new Error('OPENAI_API_KEY is not configured on the server.'), { status: 503 });
+  const instructions = `You are the CoverageIQ assistant, a helpful, professional, and concise support assistant for CoverageIQ, an AI-assisted insurance compliance monitoring product for contractors and property managers.
+
+You help users understand their vendor insurance compliance and how to use the product. Answer using the workspace context provided. Be accurate and grounded: only state facts that appear in the context. If the answer is not in the context, say you don't have that information rather than guessing.
+
+Use calm, clear, responsible language. Refer to "AI-assisted analysis" and "identified gaps" rather than guaranteeing compliance. Never claim legal advice, certifications, or guaranteed compliance.
+
+Keep answers short (2-5 sentences unless a short list is genuinely helpful). Use plain text with line breaks for lists. Do not use markdown.`;
+  const payload = { model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', instructions, input: [{ role: 'user', content: `Workspace context:\n${context || '(no context provided)'}\n\nUser question:\n${message}` }] };
+  const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!response.ok) throw Object.assign(new Error(`Assistant request failed: ${await response.text()}`), { status: 502 });
+  const raw = await response.json();
+  const output = raw.output_text;
+  if (!output) throw Object.assign(new Error('The assistant did not return a response.'), { status: 502 });
+  return output;
+}
+
 async function handler(request, response) {
   try {
     const url = new URL(request.url, 'http://localhost');
@@ -88,6 +106,11 @@ async function handler(request, response) {
     if (request.method === 'POST' && url.pathname === '/api/analyze-document') {
       const body = await requestJson(request); const document = getDocument(body.id); if (!document) return json(response, 404, { error: 'Document not found.' });
       try { const { extracted, raw } = await extractWithOpenAI(document); const primary = extracted.coverages?.[0]; if (!primary?.type) throw new Error('AI could not identify a coverage type.'); database.prepare('UPDATE documents SET analysis_status=?, insurer_name=?, policy_number=?, coverage_type=?, coverage_limit=?, effective_date=?, expiration_date=?, confidence=?, raw_ai_response=? WHERE id=?').run('COMPLETE', extracted.insurer, extracted.policy_number, primary.type, primary.limit, extracted.effective_date, extracted.expiration_date, extracted.confidence, JSON.stringify({ extracted, raw }), document.id); return json(response, 200, { extracted, compliance: compareDocument(getDocument(document.id)) }); } catch (error) { database.prepare('UPDATE documents SET analysis_status=? WHERE id=?').run('FAILED', document.id); throw error; }
+    }
+    if (request.method === 'POST' && url.pathname === '/api/chat') {
+      const body = await requestJson(request); const message = typeof body.message === 'string' ? body.message.trim() : ''; const context = typeof body.context === 'string' ? body.context : '';
+      if (!message) return json(response, 400, { error: 'A message is required.' });
+      try { return json(response, 200, { reply: await chatWithOpenAI(message, context) }); } catch (error) { return json(response, error.status || 500, { error: error.message || 'Server error.' }); }
     }
     const documentMatch = url.pathname.match(/^\/api\/documents\/([^/]+)$/); if (request.method === 'GET' && documentMatch) { const document = getDocument(documentMatch[1]); return document ? json(response, 200, document) : json(response, 404, { error: 'Document not found.' }); }
     const vendorMatch = url.pathname.match(/^\/api\/vendors\/([^/]+)\/compliance$/); if (request.method === 'GET' && vendorMatch) { const vendor = database.prepare('SELECT * FROM vendors WHERE id=?').get(vendorMatch[1]); return vendor ? json(response, 200, { vendor, documents: database.prepare('SELECT * FROM documents WHERE vendor_id=?').all(vendor.id) }) : json(response, 404, { error: 'Vendor not found.' }); }

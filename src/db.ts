@@ -11,6 +11,7 @@ export interface User {
 export interface Company {
   id: string;
   name: string;
+  industry?: string;
 }
 
 export interface Project {
@@ -28,6 +29,7 @@ export interface CoverageRequirement {
   coverage_type: string;
   minimum_limit?: number;
   required: boolean;
+  notes?: string;
 }
 
 export interface Vendor {
@@ -263,22 +265,35 @@ export function seedDatabase() {
   const nextYear = new Date(now); nextYear.setFullYear(now.getFullYear() + 1);
   const nextMonth = new Date(now); nextMonth.setDate(now.getDate() + 14);
 
+  const doc = (vendorId: string, insurer: string, policy: string, coverage_type: string, coverage_limit: number | undefined, expiration: Date): Document => ({
+    id: crypto.randomUUID(), vendorId, projectId: pId, upload_date: now.toISOString(), insurer_name: insurer, policy_number: policy, coverage_type, coverage_limit, effective_date: now.toISOString(), expiration_date: expiration.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.',
+  });
+
   db.documents = [
-    // Vendor 1: Fully Compliant
-    { id: crypto.randomUUID(), vendorId: v1, projectId: pId, upload_date: now.toISOString(), insurer_name: 'SafeCo', policy_number: 'POL-101', coverage_type: 'General Liability', coverage_limit: 1000000, effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.' },
-    { id: crypto.randomUUID(), vendorId: v1, projectId: pId, upload_date: now.toISOString(), insurer_name: 'SafeCo', policy_number: 'POL-102', coverage_type: 'Auto Liability', coverage_limit: 1000000, effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.' },
-    { id: crypto.randomUUID(), vendorId: v1, projectId: pId, upload_date: now.toISOString(), insurer_name: 'SafeCo', policy_number: 'POL-103', coverage_type: 'Workers Compensation', effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.' },
-    { id: crypto.randomUUID(), vendorId: v1, projectId: pId, upload_date: now.toISOString(), insurer_name: 'SafeCo', policy_number: 'POL-104', coverage_type: 'Umbrella', coverage_limit: 2000000, effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.' },
+    // Vendor 1: Fully compliant across all four required coverages.
+    doc(v1, 'SafeCo', 'POL-101', 'General Liability', 1000000, nextYear),
+    doc(v1, 'SafeCo', 'POL-102', 'Auto Liability', 1000000, nextYear),
+    doc(v1, 'SafeCo', 'POL-103', 'Workers Compensation', undefined, nextYear),
+    doc(v1, 'SafeCo', 'POL-104', 'Umbrella', 2000000, nextYear),
 
-    // Vendor 2: Insufficient limit (GL $500k)
-    { id: crypto.randomUUID(), vendorId: v2, projectId: pId, upload_date: now.toISOString(), insurer_name: 'BuildInsure', policy_number: 'ABC-500', coverage_type: 'General Liability', coverage_limit: 500000, effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Non-Compliant', gap_analysis: 'Required: $1,000,000. Detected: $500,000. SHORTFALL: $500,000' },
-    
-    // Vendor 3: Missing Umbrella coverage
-    { id: crypto.randomUUID(), vendorId: v3, projectId: pId, upload_date: now.toISOString(), insurer_name: 'HVAC Guard', policy_number: 'HV-001', coverage_type: 'General Liability', coverage_limit: 1000000, effective_date: now.toISOString(), expiration_date: nextYear.toISOString(), compliance_status: 'Compliant', gap_analysis: 'Requirements met.' },
-    // missing auto, workers comp, umbrella -> Non-Compliant
+    // Vendor 2: General Liability is below the $1M minimum (shortfall $500k).
+    doc(v2, 'BuildInsure', 'ABC-500', 'General Liability', 500000, nextYear),
+    doc(v2, 'BuildInsure', 'ABC-501', 'Auto Liability', 1000000, nextYear),
+    doc(v2, 'BuildInsure', 'ABC-502', 'Workers Compensation', undefined, nextYear),
+    doc(v2, 'BuildInsure', 'ABC-503', 'Umbrella', 2000000, nextYear),
 
-    // Vendor 4: Expiring soon (14 days)
-    { id: crypto.randomUUID(), vendorId: v4, projectId: pId, upload_date: now.toISOString(), insurer_name: 'GlassSure', policy_number: 'GLS-999', coverage_type: 'General Liability', coverage_limit: 1000000, effective_date: now.toISOString(), expiration_date: nextMonth.toISOString(), compliance_status: 'Expiring Soon', gap_analysis: 'Expires within 30 days.' },
+    // Vendor 3: Missing the required Umbrella coverage entirely.
+    doc(v3, 'HVAC Guard', 'HV-001', 'General Liability', 1000000, nextYear),
+    doc(v3, 'HVAC Guard', 'HV-002', 'Auto Liability', 1000000, nextYear),
+    doc(v3, 'HVAC Guard', 'HV-003', 'Workers Compensation', undefined, nextYear),
+
+    // Vendor 4: General Liability expires within 30 days.
+    doc(v4, 'GlassSure', 'GLS-999', 'General Liability', 1000000, nextMonth),
+    doc(v4, 'GlassSure', 'GLS-100', 'Auto Liability', 1000000, nextYear),
+    doc(v4, 'GlassSure', 'GLS-101', 'Workers Compensation', undefined, nextYear),
+    doc(v4, 'GlassSure', 'GLS-102', 'Umbrella', 2000000, nextYear),
+
+    // Vendor 5: No documents submitted yet.
   ];
 
   db.reanalyzeProject(pId);
