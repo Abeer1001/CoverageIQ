@@ -22,7 +22,12 @@ database.exec(`PRAGMA journal_mode = WAL;
 `);
 try { database.exec('ALTER TABLE vendors ADD COLUMN upload_token TEXT'); } catch { /* existing database already has the column */ }
 
-function json(response, status, body) { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(body)); }
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+function json(response, status, body) { response.writeHead(status, { 'Content-Type': 'application/json', ...corsHeaders }); response.end(JSON.stringify(body)); }
 async function requestJson(request) { const chunks = []; for await (const chunk of request) chunks.push(chunk); return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
 function getDocument(id) { return database.prepare('SELECT * FROM documents WHERE id = ?').get(id); }
 function money(value) { return `$${Number(value || 0).toLocaleString('en-US')}`; }
@@ -280,6 +285,7 @@ async function chatWithAssistant(message, context) {
 }
 
 async function handler(request, response) {
+  if (request.method === 'OPTIONS') { response.writeHead(204, corsHeaders); response.end(); return; }
   try {
     const url = new URL(request.url, 'http://localhost');
     if (request.method === 'POST' && url.pathname === '/api/upload') {
