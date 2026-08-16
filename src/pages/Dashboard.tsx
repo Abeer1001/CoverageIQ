@@ -171,7 +171,19 @@ export default function Dashboard() {
                   )}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{alert.title}</div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{alert.description}</div>
+                    {alert.type === 'coverage_gap' && alert.coverageType ? (
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        <div>{alert.vendorName} — {alert.coverageType}</div>
+                        <div style={{ fontWeight: 600, color: 'var(--color-danger)' }}>
+                          {alert.detectedLimit ? `$${alert.detectedLimit.toLocaleString()}` : 'Not provided'} / ${(alert.requiredLimit || 0).toLocaleString()} required
+                        </div>
+                        <div style={{ color: 'var(--color-danger)' }}>
+                          ${((alert.requiredLimit || 0) - (alert.detectedLimit || 0)).toLocaleString()} shortfall
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{alert.description}</div>
+                    )}
                   </div>
                   <Link to={linkFor(alert.type, alert.projectId)} className="btn btn-secondary btn-sm" style={{ whiteSpace: 'nowrap' }}>
                     {actionFor(alert.type)} <ArrowRight size={14} />

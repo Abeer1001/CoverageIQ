@@ -14,6 +14,10 @@ dist-ssr
 .env
 data/
 
+# Tesseract OCR language data (downloaded at runtime)
+eng.traineddata
+*.sqlite
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

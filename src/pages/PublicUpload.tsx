@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Loader2, UploadCloud, AlertCircle, AlertTriangle } from 'lucide-react';
-import { db, type Document, type Vendor } from '../db';
+import { CheckCircle, Check, Loader2, UploadCloud, AlertCircle, AlertTriangle } from 'lucide-react';
+import { db, type Document, type Vendor, type Project, type CoverageRequirement } from '../db';
 import { LogoMark } from '../components/Logo';
+
+const ANALYSIS_STEPS = [
+  'Document received',
+  'Reading certificate',
+  'Extracting policy information',
+  'Matching coverage',
+  'Checking project requirements',
+  'Generating compliance findings',
+];
 
 export default function PublicUpload() {
   const { token } = useParams();
@@ -11,34 +20,96 @@ export default function PublicUpload() {
   const [stage, setStage] = useState<'idle' | 'uploading' | 'analyzing' | 'complete' | 'error'>('idle');
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
-  const project = vendor ? db.projects.find(item => item.id === vendor.projectId) : undefined;
-  const requirements = vendor ? db.requirements.filter(item => item.projectId === vendor.projectId) : [];
+  const [storedId, setStoredId] = useState<string | null>(null);
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [requirements, setRequirements] = useState<CoverageRequirement[]>([]);
 
-  useEffect(() => setVendor(db.vendors.find(item => item.upload_token === token) || null), [token]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/upload/${token}`);
+        if (!res.ok) { if (!cancelled) setVendor(null); return; }
+        const data = await res.json();
+        if (cancelled) return;
+        setVendor(data.vendor || null);
+        setProject(data.project || null);
+        setRequirements(Array.isArray(data.requirements) ? data.requirements : []);
+      } catch {
+        if (cancelled) return;
+        const v = db.vendors.find(item => item.upload_token === token) || null;
+        setVendor(v);
+        setProject(v ? db.projects.find(p => p.id === v.projectId) || null : null);
+        setRequirements(v ? db.requirements.filter(r => r.projectId === v.projectId) : []);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  async function runAnalysis(id: string, file: File) {
+    setError('');
+    setStage('analyzing');
+    try {
+      const analyzed = await fetch('/api/analyze-document', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const analysis = await analyzed.json();
+      if (!analyzed.ok) throw new Error(analysis.error || 'Analysis failed.');
+      if (!vendor || !project) throw new Error('The workspace could not be resolved for this document.');
+      const extracted = analysis.extracted || {};
+      const serverDocument = analysis.compliance?.document || {};
+      const coverages = Array.isArray(extracted.coverages) && extracted.coverages.length > 0
+        ? extracted.coverages
+        : [{ type: serverDocument.coverage_type, limit: serverDocument.coverage_limit }];
+      const base = {
+        vendorId: vendor.id,
+        projectId: project.id,
+        upload_date: serverDocument.uploaded_at || new Date().toISOString(),
+        insurer_name: extracted.insurer || serverDocument.insurer_name || '',
+        policy_number: extracted.policy_number || serverDocument.policy_number || '',
+        effective_date: extracted.effective_date || serverDocument.effective_date || '',
+        expiration_date: extracted.expiration_date || serverDocument.expiration_date || '',
+        file_name: serverDocument.filename,
+        file_type: serverDocument.mime_type,
+        confidence: extracted.confidence ?? serverDocument.confidence,
+      };
+      const newDocuments: Document[] = coverages.map((coverage: { type?: string; limit?: number | null }) => ({
+        ...base,
+        id: crypto.randomUUID(),
+        coverage_type: coverage?.type || serverDocument.coverage_type || '',
+        coverage_limit: coverage?.limit ?? undefined,
+        compliance_status: 'Compliant',
+        gap_analysis: 'Requirements met.',
+      }));
+      try {
+        await fetch('/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, documents: newDocuments, activity: `${vendor.name} uploaded and analyzed ${file.name}` }) });
+      } catch { /* server persistence is best-effort; local db still updated below */ }
+      db.documents = [...db.documents.filter(item => item.vendorId !== vendor.id), ...newDocuments];
+      db.logActivity(project.id, `${vendor.name} uploaded and analyzed ${file.name}`, vendor.id);
+      db.reanalyzeProject(project.id);
+      setStage('complete');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The document could not be processed.');
+      setStage('error');
+    }
+  }
 
   async function handleFile(file: File) {
     if (!file || !vendor || !project) return;
     if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type) || file.size > 10 * 1024 * 1024) {
       setError('Choose a PDF, JPG, or PNG file no larger than 10 MB.'); setStage('error'); return;
     }
+    setLastFile(file);
+    setError('');
+    setStage('uploading');
     try {
-      setError(''); setStage('uploading');
       const payload = new FormData();
       payload.append('file', file);
       payload.append('manifest', JSON.stringify({ project: { id: project.id, name: project.name }, vendor: { id: vendor.id, name: vendor.name, email: vendor.email, upload_token: vendor.upload_token }, requirements }));
       const stored = await fetch('/api/upload', { method: 'POST', body: payload });
       const storedData = await stored.json();
       if (!stored.ok) throw new Error(storedData.error || 'Upload failed.');
-      setStage('analyzing');
-      const analyzed = await fetch('/api/analyze-document', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: storedData.id }) });
-      const analysis = await analyzed.json();
-      if (!analyzed.ok) throw new Error(analysis.error || 'Analysis failed.');
-      const serverDocument = analysis.compliance.document;
-      const document: Document = { id: serverDocument.id, vendorId: vendor.id, projectId: project.id, upload_date: serverDocument.uploaded_at, insurer_name: serverDocument.insurer_name || '', policy_number: serverDocument.policy_number || '', coverage_type: serverDocument.coverage_type || '', coverage_limit: serverDocument.coverage_limit || undefined, effective_date: serverDocument.effective_date || '', expiration_date: serverDocument.expiration_date || '', compliance_status: serverDocument.compliance_status || 'Needs Review', gap_analysis: serverDocument.gap_analysis || 'Analysis requires review.', file_name: serverDocument.filename, file_type: serverDocument.mime_type, confidence: serverDocument.confidence };
-      db.documents = [...db.documents.filter(item => item.id !== document.id), document];
-      db.vendors = db.vendors.map(item => item.id === vendor.id ? { ...item, overall_status: analysis.compliance.status } : item);
-      db.logActivity(project.id, `${vendor.name} uploaded and analyzed ${file.name}`, vendor.id);
-      setStage('complete');
+      setStoredId(storedData.id);
+      await runAnalysis(storedData.id, file);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The document could not be processed.');
       setStage('error');
@@ -69,7 +140,17 @@ export default function PublicUpload() {
     );
   }
 
-  const retry = () => { setError(''); setStage('idle'); };
+  const retry = () => { setError(''); setStoredId(null); setStage('idle'); };
+  const retryAnalysis = () => { if (storedId && lastFile) runAnalysis(storedId, lastFile); };
+
+  const stepState = (index: number): 'done' | 'active' | 'pending' => {
+    if (stage === 'complete') return 'done';
+    if (stage === 'uploading') return index === 0 ? 'active' : 'pending';
+    if (stage === 'analyzing') return index === 0 ? 'done' : index === 1 ? 'active' : 'pending';
+    return 'pending';
+  };
+
+  const showPipeline = stage === 'uploading' || stage === 'analyzing' || stage === 'complete';
 
   return (
     <div className="flex-center" style={{ minHeight: '100vh', backgroundColor: 'var(--color-bg-body)', padding: 'var(--space-4)' }}>
@@ -103,19 +184,30 @@ export default function PublicUpload() {
           </label>
         )}
 
-        {stage === 'uploading' && (
-          <div style={{ padding: 40 }}>
-            <Loader2 className="spin" size={42} color="var(--color-brand)" />
-            <p style={{ marginTop: 'var(--space-2)' }}>Uploading document...</p>
+        {showPipeline && (
+          <div className="analysis-pipeline" role="status" aria-live="polite">
+            {ANALYSIS_STEPS.map((label, index) => {
+              const state = stepState(index);
+              return (
+                <div className={`pipeline-step ${state}`} key={label}>
+                  <span className="pipeline-indicator">
+                    {state === 'done' ? <Check size={14} /> : state === 'active' ? <Loader2 className="spin" size={14} /> : <span className="pipeline-dot" />}
+                  </span>
+                  <span className="pipeline-label">{label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
+        {stage === 'uploading' && (
+          <p className="text-muted" style={{ marginTop: 'var(--space-3)', marginBottom: 0 }}>Securely transferring your document…</p>
+        )}
+
         {stage === 'analyzing' && (
-          <div style={{ padding: 40 }}>
-            <Loader2 className="spin" size={42} color="var(--color-brand)" />
-            <p style={{ marginTop: 'var(--space-2)' }}>Analyzing certificate...</p>
-            <p className="text-muted" style={{ fontSize: '0.875rem' }}>Extracting policy information and comparing coverage with project requirements.</p>
-          </div>
+          <p className="text-muted" style={{ marginTop: 'var(--space-3)', marginBottom: 0 }}>
+            AI-assisted extraction is reading the certificate and comparing it with <strong>{project?.name}</strong> requirements.
+          </p>
         )}
 
         {stage === 'error' && (
@@ -123,7 +215,13 @@ export default function PublicUpload() {
             <div className="badge badge-danger" style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', padding: '10px', marginBottom: 'var(--space-3)', whiteSpace: 'normal' }} role="alert">
               <AlertCircle size={18} /> {error}
             </div>
-            <button className="btn btn-secondary" onClick={retry}>Try another document</button>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {storedId && lastFile ? (
+                <button className="btn btn-primary" onClick={retryAnalysis}>Retry Analysis</button>
+              ) : (
+                <button className="btn btn-secondary" onClick={retry}>Try another document</button>
+              )}
+            </div>
           </div>
         )}
 
@@ -139,7 +237,18 @@ export default function PublicUpload() {
           </div>
         )}
       </div>
-      <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .analysis-pipeline { display: flex; flex-direction: column; gap: 10px; max-width: 380px; margin: 0 auto; text-align: left; }
+        .pipeline-step { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; color: var(--color-text-muted); transition: color 0.2s ease; }
+        .pipeline-step.done { color: var(--color-text-main); }
+        .pipeline-step.active { color: var(--color-text-main); font-weight: 500; }
+        .pipeline-indicator { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--color-border); background: white; color: var(--color-text-light); }
+        .pipeline-step.done .pipeline-indicator { background: var(--color-success); border-color: var(--color-success); color: white; }
+        .pipeline-step.active .pipeline-indicator { border-color: var(--color-brand); color: var(--color-brand); }
+        .pipeline-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-light); display: inline-block; }
+      `}</style>
     </div>
   );
 }

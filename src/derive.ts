@@ -10,6 +10,9 @@ export interface AlertItem {
   vendorId: string;
   projectId: string;
   description: string;
+  coverageType?: string;
+  requiredLimit?: number;
+  detectedLimit?: number;
 }
 
 export interface NotificationItem {
@@ -64,6 +67,8 @@ export function deriveAlerts(companyId: string): AlertItem[] {
       }
       const best = matching.sort((a, b) => (b.coverage_limit || 0) - (a.coverage_limit || 0))[0];
       if (req.minimum_limit && (!best.coverage_limit || best.coverage_limit < req.minimum_limit)) {
+        const detected = best.coverage_limit || 0;
+        const shortfall = req.minimum_limit - detected;
         alerts.push({
           id: `gap-${vendor.id}-${req.id}`,
           type: 'coverage_gap',
@@ -71,7 +76,10 @@ export function deriveAlerts(companyId: string): AlertItem[] {
           vendorName: vendor.name,
           vendorId: vendor.id,
           projectId: vendor.projectId,
-          description: `${req.coverage_type} is below the required project limit for ${vendor.name}.`,
+          coverageType: req.coverage_type,
+          requiredLimit: req.minimum_limit,
+          detectedLimit: best.coverage_limit || undefined,
+          description: `${req.coverage_type} is $${shortfall.toLocaleString()} below the required $${req.minimum_limit.toLocaleString()} for ${vendor.name}.`,
         });
       }
     });

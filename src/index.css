@@ -530,6 +530,39 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .mock-status.bad { color: var(--color-danger); background: var(--color-danger-bg); }
 .mock-status.warn { color: var(--color-warning); background: var(--color-warning-bg); }
 
+/* Hero comparison mockup */
+.cmp-mockup { text-align: left; }
+.cmp-project-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-3); }
+.cmp-kicker { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-light); margin-bottom: 2px; }
+.cmp-project-name { font-weight: 600; font-size: 0.9rem; }
+.cmp-block { margin-bottom: var(--space-3); }
+.cmp-block-label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-light); margin-bottom: 6px; }
+.cmp-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.cmp-cov { font-weight: 500; font-size: 0.875rem; }
+.cmp-amount { font-weight: 600; font-size: 0.875rem; }
+.cmp-amount-bad { color: var(--color-danger); }
+.cmp-arrow { text-align: center; color: var(--color-text-light); font-size: 1.1rem; margin: 2px 0 var(--space-2); }
+.cmp-verdict { display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: 12px; border-radius: var(--radius-md); background: var(--color-danger-bg); border: 1px solid rgba(220,38,38,0.2); }
+.cmp-shortfall { font-weight: 700; font-size: 0.9rem; color: var(--color-danger); }
+
+/* Signature comparison */
+.compare-shell { max-width: 860px; margin: 0 auto; background: white; border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); overflow: hidden; }
+.compare-grid { display: grid; grid-template-columns: 1fr; }
+@media (min-width: 800px) { .compare-grid { grid-template-columns: 1fr 1fr; } }
+.compare-col { padding: var(--space-4); }
+.compare-col-doc { border-top: 1px solid var(--color-border); }
+@media (min-width: 800px) { .compare-col-doc { border-top: none; border-left: 1px solid var(--color-border); } }
+.compare-col-head { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-light); margin-bottom: var(--space-2); }
+.compare-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.compare-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; }
+.compare-item-bad { background: var(--color-danger-bg); border-color: rgba(220,38,38,0.2); }
+.compare-strong { font-weight: 600; color: var(--color-text-main); }
+.compare-item-bad .compare-strong { color: var(--color-danger); }
+.compare-result { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-3) var(--space-4); background: var(--color-bg-body); border-top: 1px solid var(--color-border); }
+.compare-result > div { display: flex; align-items: center; gap: 8px; }
+.compare-result-text { font-weight: 600; font-size: 0.95rem; }
+.compare-result-actions { display: flex; align-items: center; gap: var(--space-2); }
+
 .section { padding: var(--space-8) var(--space-4); }
 .section-alt { background: var(--color-bg-body); }
 .section-inner { max-width: 1080px; margin: 0 auto; }
@@ -843,6 +876,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
 .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes chatBlink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .chat-suggestions {
   display: flex;

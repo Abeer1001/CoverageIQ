@@ -80,6 +80,10 @@ export interface Reminder {
 
 // Database helper
 class LocalDB {
+  private companyId: string | null = null;
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressSync = false;
+
   private get<T>(key: string): T[] {
     const data = localStorage.getItem(`coverageiq_${key}`);
     return data ? JSON.parse(data) : [];
@@ -90,28 +94,86 @@ class LocalDB {
 
   // Collections
   get users(): User[] { return this.get<User>('users'); }
-  set users(v: User[]) { this.set('users', v); }
+  set users(v: User[]) { this.set('users', v); this.scheduleSync(); }
 
   get companies(): Company[] { return this.get<Company>('companies'); }
-  set companies(v: Company[]) { this.set('companies', v); }
+  set companies(v: Company[]) { this.set('companies', v); this.scheduleSync(); }
 
   get projects(): Project[] { return this.get<Project>('projects'); }
-  set projects(v: Project[]) { this.set('projects', v); }
+  set projects(v: Project[]) { this.set('projects', v); this.scheduleSync(); }
 
   get requirements(): CoverageRequirement[] { return this.get<CoverageRequirement>('requirements'); }
-  set requirements(v: CoverageRequirement[]) { this.set('requirements', v); }
+  set requirements(v: CoverageRequirement[]) { this.set('requirements', v); this.scheduleSync(); }
 
   get vendors(): Vendor[] { return this.get<Vendor>('vendors'); }
-  set vendors(v: Vendor[]) { this.set('vendors', v); }
+  set vendors(v: Vendor[]) { this.set('vendors', v); this.scheduleSync(); }
 
   get documents(): Document[] { return this.get<Document>('documents'); }
-  set documents(v: Document[]) { this.set('documents', v); }
+  set documents(v: Document[]) { this.set('documents', v); this.scheduleSync(); }
 
   get activity(): ActivityLog[] { return this.get<ActivityLog>('activity'); }
-  set activity(v: ActivityLog[]) { this.set('activity', v); }
+  set activity(v: ActivityLog[]) { this.set('activity', v); this.scheduleSync(); }
 
   get reminders(): Reminder[] { return this.get<Reminder>('reminders'); }
-  set reminders(v: Reminder[]) { this.set('reminders', v); }
+  set reminders(v: Reminder[]) { this.set('reminders', v); this.scheduleSync(); }
+
+  setCompanyId(id: string | null) { this.companyId = id; }
+
+  private snapshot() {
+    return {
+      users: this.users,
+      companies: this.companies,
+      projects: this.projects,
+      requirements: this.requirements,
+      vendors: this.vendors,
+      documents: this.documents,
+      activity: this.activity,
+      reminders: this.reminders,
+    };
+  }
+
+  private scheduleSync() {
+    if (this.suppressSync || !this.companyId) return;
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => { void this.pushWorkspace(); }, 250);
+  }
+
+  async pushWorkspace() {
+    if (!this.companyId) return;
+    try {
+      await fetch(`/api/workspace/${this.companyId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: this.snapshot() }),
+      });
+    } catch {
+      // Server unreachable — localStorage remains the local source of truth.
+    }
+  }
+
+  async hydrate(companyId: string) {
+    this.setCompanyId(companyId);
+    try {
+      const res = await fetch(`/api/workspace/${companyId}`);
+      if (res.ok) {
+        const { data } = await res.json();
+        if (data && typeof data === 'object') {
+          this.suppressSync = true;
+          if (Array.isArray(data.users)) this.users = data.users;
+          if (Array.isArray(data.companies)) this.companies = data.companies;
+          if (Array.isArray(data.projects)) this.projects = data.projects;
+          if (Array.isArray(data.requirements)) this.requirements = data.requirements;
+          if (Array.isArray(data.vendors)) this.vendors = data.vendors;
+          if (Array.isArray(data.documents)) this.documents = data.documents;
+          if (Array.isArray(data.activity)) this.activity = data.activity;
+          if (Array.isArray(data.reminders)) this.reminders = data.reminders;
+          this.suppressSync = false;
+        }
+      }
+    } catch {
+      // Server unreachable — fall back to whatever is already in localStorage.
+    }
+  }
 
   logActivity(projectId: string, description: string, vendorId?: string) {
     this.activity = [...this.activity, {

@@ -18,27 +18,28 @@ import { LogoMark } from '../components/Logo';
 const problemCards = [
   {
     icon: FileText,
-    title: 'Lost in email',
-    body: 'Insurance certificates are difficult to track when every vendor sends documents differently.',
+    title: 'Scattered documents',
+    body: 'Certificates arrive through email, shared folders, and different vendor workflows.',
   },
   {
     icon: Search,
     title: 'Manual checking',
-    body: 'Reviewing coverage limits and policy dates vendor by vendor takes time.',
+    body: 'Someone still has to read the document and compare it with project requirements.',
   },
   {
     icon: AlertTriangle,
-    title: 'Surprise gaps',
-    body: 'Missing or insufficient coverage can go unnoticed until someone checks manually.',
+    title: 'Late discovery',
+    body: 'Missing or insufficient coverage may only become visible when someone manually checks.',
   },
 ];
 
 const steps = [
-  { title: 'Set your requirements', body: 'Define the insurance coverage and minimum limits required for each project.' },
-  { title: 'Collect documents', body: 'Give vendors a secure upload link so they can submit their certificates directly.' },
-  { title: 'Let CoverageIQ analyze', body: 'AI-assisted document analysis extracts policy information and coverage details.' },
-  { title: 'Compare automatically', body: 'CoverageIQ compares extracted information against the requirements for that project.' },
-  { title: 'Take action', body: 'See exactly which vendors need attention and why.' },
+  { title: 'Set requirements', body: 'Define the coverage and minimum limits required for each project.' },
+  { title: 'Invite vendors', body: 'Share a secure upload link so subcontractors can submit documents without an account.' },
+  { title: 'Collect certificates', body: 'Certificates arrive in one place, tied to the right vendor and project.' },
+  { title: 'Analyze documents', body: 'AI-assisted extraction reads the policy details from each uploaded document.' },
+  { title: 'Compare coverage', body: 'Detected limits are checked against your project requirements automatically.' },
+  { title: 'Take action', body: 'See exactly which vendors need attention and why, then request updates.' },
 ];
 
 const features = [
@@ -149,38 +150,41 @@ export default function Landing() {
             <div className="mockup-window">
               <div className="mockup-titlebar">
                 <span className="mockup-dots"><i /><i /><i /></span>
-                <span className="mockup-url">app.coverageiq.com/dashboard</span>
+                <span className="mockup-url">app.coverageiq.com/review</span>
               </div>
-              <div className="mockup-body">
-                <div className="mockup-top">
-                  <div className="mockup-title">Compliance Health</div>
-                  <span className="mockup-pill">Live workspace</span>
-                </div>
-                <div className="mockup-bar">
-                  <span className="mockup-seg ok" style={{ flex: 3 }} />
-                  <span className="mockup-seg warn" style={{ flex: 1 }} />
-                  <span className="mockup-seg bad" style={{ flex: 1 }} />
-                  <span className="mockup-seg neutral" style={{ flex: 1 }} />
-                </div>
-                <div className="mockup-legend">
-                  <span><i className="ok" />Compliant</span>
-                  <span><i className="warn" />Expiring</span>
-                  <span><i className="bad" />Non-compliant</span>
-                  <span><i className="neutral" />Missing</span>
-                </div>
-                <div className="mockup-rows">
-                  <div className="mockup-row">
-                    <span className="mockup-name">XYZ Plumbing</span>
-                    <span className="mock-status ok">Compliant</span>
+              <div className="mockup-body cmp-mockup">
+                <div className="cmp-project-row">
+                  <div>
+                    <div className="cmp-kicker">Project</div>
+                    <div className="cmp-project-name">Downtown Office Renovation</div>
                   </div>
-                  <div className="mockup-row">
-                    <span className="mockup-name">ABC Electrical LLC</span>
-                    <span className="mock-status bad">Non-compliant</span>
+                  <div>
+                    <div className="cmp-kicker">Vendor</div>
+                    <div className="cmp-project-name">ABC Electrical</div>
                   </div>
-                  <div className="mockup-row">
-                    <span className="mockup-name">City Glass</span>
-                    <span className="mock-status warn">Expiring soon</span>
+                </div>
+
+                <div className="cmp-block">
+                  <div className="cmp-block-label">Project requirement</div>
+                  <div className="cmp-line">
+                    <span className="cmp-cov">General Liability</span>
+                    <span className="cmp-amount">$1,000,000 minimum</span>
                   </div>
+                </div>
+
+                <div className="cmp-block">
+                  <div className="cmp-block-label">Document detected</div>
+                  <div className="cmp-line">
+                    <span className="cmp-cov">General Liability</span>
+                    <span className="cmp-amount cmp-amount-bad">$500,000</span>
+                  </div>
+                </div>
+
+                <div className="cmp-arrow">↓</div>
+
+                <div className="cmp-verdict">
+                  <span className="mock-status bad">Non-compliant</span>
+                  <span className="cmp-shortfall">$500,000 shortfall</span>
                 </div>
               </div>
             </div>
@@ -234,32 +238,66 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Differentiator */}
-      <section className="section section-alt">
-        <div className="section-inner text-center">
+      {/* Signature — the comparison */}
+      <section className="section section-alt" id="comparison">
+        <div className="section-inner">
           <div className="section-head reveal">
-            <h2>We don't just store the certificate.</h2>
-            <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--color-text-main)' }}>CoverageIQ tells you what is wrong with it.</p>
+            <h2>A certificate isn't the answer. The comparison is.</h2>
+            <p>CoverageIQ reads what the document actually contains, then checks it against what your project requires — so a gap becomes obvious instead of buried in the fine print.</p>
           </div>
-          <div className="diff-grid reveal">
-            <div className="diff-cell">
-              <div className="diff-label">Project requirement</div>
-              <div className="diff-value">General Liability</div>
-              <div className="text-muted" style={{ fontSize: '0.9rem' }}>$1,000,000 minimum</div>
+          <div className="compare-shell reveal">
+            <div className="compare-grid">
+              <div className="compare-col">
+                <div className="compare-col-head">
+                  <ShieldCheck size={16} color="var(--color-text-muted)" />
+                  Project requirements
+                </div>
+                <ul className="compare-list">
+                  <li className="compare-item">
+                    <span>General Liability</span>
+                    <span className="compare-strong">$1,000,000</span>
+                  </li>
+                  <li className="compare-item">
+                    <span>Auto Liability</span>
+                    <span className="compare-strong">$1,000,000</span>
+                  </li>
+                  <li className="compare-item">
+                    <span>Workers Compensation</span>
+                    <span className="compare-strong">Required</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="compare-col compare-col-doc">
+                <div className="compare-col-head">
+                  <Sparkles size={16} color="var(--color-brand)" />
+                  Document analysis
+                </div>
+                <ul className="compare-list">
+                  <li className="compare-item compare-item-bad">
+                    <span>General Liability</span>
+                    <span className="compare-strong">$500,000</span>
+                  </li>
+                  <li className="compare-item">
+                    <span>Auto Liability</span>
+                    <span className="compare-strong">$1,000,000</span>
+                  </li>
+                  <li className="compare-item">
+                    <span>Workers Compensation</span>
+                    <span className="compare-strong">Detected</span>
+                  </li>
+                </ul>
+              </div>
             </div>
-            <div className="diff-cell">
-              <div className="diff-label">Document</div>
-              <div className="diff-value">General Liability</div>
-              <div className="text-muted" style={{ fontSize: '0.9rem' }}>$500,000 detected</div>
+            <div className="compare-result">
+              <div>
+                <AlertTriangle size={18} color="var(--color-danger)" />
+                <span className="compare-result-text">1 requirement needs attention.</span>
+              </div>
+              <div className="compare-result-actions">
+                <span className="mock-status bad">Non-compliant</span>
+                <Link to="/signup" className="btn btn-primary btn-sm">Review Vendor</Link>
+              </div>
             </div>
-            <div className="diff-cell diff-bad">
-              <div className="diff-label">Result</div>
-              <div className="diff-value">Non-compliant</div>
-              <div className="text-muted" style={{ fontSize: '0.9rem' }}>Shortfall $500,000</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Link to="/signup" className="btn btn-primary btn-lg">See Compliance in Action</Link>
           </div>
         </div>
       </section>
@@ -288,7 +326,7 @@ export default function Landing() {
       </section>
 
       {/* Action */}
-      <section className="section section-alt">
+      <section className="section">
         <div className="section-inner text-center">
           <h2 style={{ fontSize: '2rem' }}>Stop asking, "Did they send the certificate?"</h2>
           <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--color-text-main)' }}>Start asking: "Are they actually covered?"</p>

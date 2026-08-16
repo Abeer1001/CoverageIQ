@@ -4,6 +4,7 @@ import type { User } from './db';
 
 interface AuthContextType {
   user: User | null;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   signup: (name: string, email: string, companyName: string, password: string) => Promise<void>;
@@ -14,14 +15,22 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load session from localStorage on mount
+    // Load session from localStorage on mount, then hydrate the workspace from the server.
     const storedUserId = localStorage.getItem('coverageiq_session');
     if (storedUserId) {
       const u = db.users.find(u => u.id === storedUserId);
-      if (u) setUser(u);
+      if (u) {
+        db.hydrate(u.companyId).then(() => {
+          setUser(db.users.find(x => x.id === u.id) || u);
+          setLoading(false);
+        });
+        return;
+      }
     }
+    setLoading(false);
   }, []);
 
   const hashPassword = async (password: string) => {
@@ -34,8 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const u = db.users.find(u => u.email === email);
     const passwordHash = await hashPassword(password);
     if (u && u.passwordHash === passwordHash) {
-      setUser(u);
-      localStorage.setItem('coverageiq_session', u.id);
+      await db.hydrate(u.companyId);
+      const fresh = db.users.find(x => x.id === u.id) || u;
+      setUser(fresh);
+      localStorage.setItem('coverageiq_session', fresh.id);
+      await db.pushWorkspace();
     } else {
       throw new Error('Incorrect email or password');
     }
@@ -52,9 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     db.companies = [...db.companies, { id: companyId, name: companyName }];
     const newUser = { id: userId, email, name, companyId, passwordHash: await hashPassword(password) };
     db.users = [...db.users, newUser];
-    
+
+    db.setCompanyId(companyId);
     setUser(newUser);
     localStorage.setItem('coverageiq_session', userId);
+    await db.pushWorkspace();
   };
 
   const logout = () => {
@@ -72,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, signup, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, signup, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

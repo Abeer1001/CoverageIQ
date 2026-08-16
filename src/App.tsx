@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { ToastProvider } from './components/Toast';
 import Landing from './pages/Landing';
@@ -23,8 +24,15 @@ import ChatWidget from './components/ChatWidget';
 import { LogoMark } from './components/Logo';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
+  if (loading) {
+    return (
+      <div className="flex-center" style={{ minHeight: '100vh', color: 'var(--color-brand)' }}>
+        <Loader2 className="spin" size={26} />
+      </div>
+    );
+  }
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
